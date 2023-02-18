@@ -1,0 +1,78 @@
+---
+title: "Trackman Report"
+subtitle: "Name"
+date: "date"
+output: pdf_document
+---
+
+```{r echo=FALSE, out.width="20%", out.height="20%", fig.align='center'}
+knitr::include_graphics("logo")
+```
+
+```{r setup, echo=FALSE, include=FALSE}
+library(tinytex)
+library(readr)
+library(RCurl) 
+library(DBI)
+library(RMySQL)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+db = dbConnect(MySQL(),
+               user = 'user',
+               password = 'password',
+               host = 'localhost',
+               dbname = 'db')
+
+df <- dbReadTable(db, name = "pitching_data")
+
+name <- subset(df, Pitcher == "Last name, First name")
+
+#strikezone coordinates
+x <- c(-.95,.95,.95,-.95,-.95)
+z <- c(1.6,1.6,4.0,4.0,1.6)
+
+#store in dataframe
+sz <- data.frame(x,z)
+
+#calculate means of interested metrics
+means <- df %>%
+  group_by(Pitcher, TaggedPitchType) %>% 
+  summarise_at(vars("RelSpeed", "SpinRate", "InducedVertBreak", "HorzBreak", "VertApprAngle", "SpinAxis3dSpinEfficiency"), mean)
+
+m <- subset(means, Pitcher == "Last name, First name")
+m <- m[ -c(1) ]
+
+Horz <- name %>%
+  group_by(TaggedPitchType) %>%
+  summarise_at(vars(HorzBreak), list(name = "mean"))
+```
+
+```{r echo=FALSE, results='asis'}
+knitr::kable(m, "latex", digits = c(0, 1, 0, 1, 1, 1, 2), col.names = c('Pitch Type', 'Velocity', 'Spin Rate', 'IVB', 'HB', "VAA", "Spin Efficiency"), align = "c", caption = "Pitch Averages")
+```
+
+<!-- You can also embed plots, for example: -->
+
+```{r pressure, echo=FALSE, out.width="50%", out.height="50%"}
+ggplot(name,  aes(x = PlateLocSide, y = PlateLocHeight)) + 
+  geom_path(data = sz, aes(x=x, y=z)) +
+  coord_equal() +
+  labs(title = "Pitch Location", subtitle = "From Pitcher View", x = "Horizontal Location", y = "Vertical Location") + geom_point() + xlim(-5, 5) + ylim(0, 7)
+
+ggplot(name, aes(x = RelSide, y = RelHeight, fill= TaggedPitchType, color = TaggedPitchType)) + 
+    labs(title = "Release Point", subtitle = "From Pitcher View", x = "Release Side", y = "Release Height") + geom_point() + xlim(-5, 5) + ylim(0, 7) + theme(legend.position = "bottom")
+
+ggplot(name,  aes(x = HorzBreak, y = InducedVertBreak, fill = TaggedPitchType, color = TaggedPitchType)) + 
+  labs(title = "Break Map by Pitch Type", x = "Horizontal Break", y = "Induced Vertical Break") + 
+  geom_point() + xlim(-20, 20) + ylim(-25, 25) + theme(legend.position = "bottom")
+
+ggplot(Horz, aes(x = name, y = TaggedPitchType, fill = TaggedPitchType)) + 
+  labs(title = "Horizontal Break Differences by Type", x = "Horizontal Break", y = "Pitch Type") +
+  geom_col() + xlim(-25, 25) + theme(legend.position = "bottom")
+```
+
+<!-- #Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot. -->
